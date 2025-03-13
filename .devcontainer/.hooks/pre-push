@@ -1,0 +1,14 @@
+#!/bin/bash
+
+echo "Running pre-push hook: Checking test cases"
+
+make test
+RESULT=$?
+
+if [ $RESULT -ne 0 ]; then
+    echo "❌ Tests failed. Push rejected!"
+    exit 1
+else
+    echo "✅ All tests passed. Push allowed."
+    exit 0
+fi

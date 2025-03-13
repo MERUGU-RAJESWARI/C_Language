@@ -1,0 +1,29 @@
+name: C Code CI with Coverage Check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: sudo apt update && sudo apt install -y gcc make
+
+      - name: Compile code
+        run: make
+
+      - name: Run tests and enforce coverage
+        run: |
+          make test
+          coverage=$(grep "Test Coverage" tests/test_functions.c | awk '{print $3}' | tr -d '%')
+          echo "Coverage: $coverage%"
+          if (( $(echo "$coverage < 75" | bc -l) )); then
+            echo "❌ Test Coverage is below 75%. PR cannot be merged."
+            exit 1
+          fi
