@@ -1,4 +1,4 @@
-name: C Code CI with Coverage Check
+name: Block PR if Test Coverage < 75%
 
 on:
   pull_request:
@@ -6,24 +6,46 @@ on:
       - main
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Install dependencies
-        run: sudo apt update && sudo apt install -y gcc make
+        run: sudo apt update && sudo apt install -y gcc make lcov
 
-      - name: Compile code
-        run: make
+      - name: Compile code with coverage flags
+        run: make coverage
 
-      - name: Run tests and enforce coverage
+      - name: Run tests with coverage
         run: |
-          make test
-          coverage=$(grep "Test Coverage" tests/test_functions.c | awk '{print $3}' | tr -d '%')
-          echo "Coverage: $coverage%"
-          if (( $(echo "$coverage < 75" | bc -l) )); then
-            echo "❌ Test Coverage is below 75%. PR cannot be merged."
+          ./test
+          gcov -b src/*.c | tee coverage.txt || true
+
+      - name: Debug Coverage File
+        run: cat coverage.txt || echo "⚠️ No coverage report found!"
+
+      - name: Extract coverage
+        id: check_coverage
+        run: |
+          COVERAGE=$(grep -Eo '[0-9]+%' coverage.txt | tail -1 | tr -d '%')
+          if [[ -z "$COVERAGE" ]]; then
+            echo "⚠️ Failed to extract coverage. Setting default value of 0."
+            COVERAGE=0
+          fi
+          echo "Extracted Coverage: $COVERAGE%"
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+
+      - name: Fail if coverage < 75%
+        run: |
+          if [[ ! "$COVERAGE" =~ ^[0-9]+$ ]]; then
+            echo "❌ Invalid coverage value. Fix extraction logic."
             exit 1
           fi
+          if (( COVERAGE < 75 )); then
+            echo "❌ Test coverage is below 75%. Fix it before merging."
+            exit 1
+          fi
+        shell: bash
